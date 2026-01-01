@@ -64,7 +64,7 @@ int main(int argc, char** argv)
         boost::interprocess::scoped_lock lock(obj->mutex);
         std::cout << "[DEBUG] Acquired lock. Waiting for new sequence... (last_seq=" << last_seq << ")\n";
 
-        // 객체가 새로 생성된 경우(magic/version 변경) last_seq 동기화
+        // last_seq sync if object is newly created (magic/version change)
         if (obj->magic != last_magic || obj->version != last_version) {
           std::cout << "[DEBUG] Detected new shared object (magic/version changed). Sync last_seq. last_magic=" << last_magic << ", obj->magic=" << obj->magic << ", last_version=" << last_version << ", obj->version=" << obj->version << "\n";
           last_seq = obj->sequence;
