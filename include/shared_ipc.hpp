@@ -5,6 +5,7 @@
 #include <boost/interprocess/sync/interprocess_mutex.hpp>
 #include <boost/interprocess/sync/interprocess_condition.hpp>
 
+
 #include <atomic>
 #include <cstdint>
 #include <csignal>
@@ -12,12 +13,20 @@
 #include <string>
 #include <thread>
 #include <chrono>
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 
 namespace ipc
 {
 namespace bip = boost::interprocess; // short alias
 
-inline constexpr const char* k_segment_name = "demo_shared_segment"; // name of the shared memory segment
+#ifdef _WIN32
+inline constexpr const char* k_segment_name = "Global\\demo_shared_segment"; // Windows: Global namespace for shared memory
+#else
+inline constexpr const char* k_segment_name = "demo_shared_segment"; // Linux/Unix
+#endif
 inline constexpr const char* k_object_name  = "demo_shared_object"; // name of the shared object within the segment. sub object of shared memory segment. 
 inline constexpr std::size_t k_segment_size = 1 * 1024 * 1024; // 1 MB. you must ensure this is enough for your data. check sizeof(shared_payload).
 
@@ -56,13 +65,19 @@ public:
     instance_ptr() = this;
     std::signal(SIGINT, &shutdown_flag::signal_handler);
     std::signal(SIGTERM, &shutdown_flag::signal_handler);
+#ifdef _WIN32
+    SetConsoleCtrlHandler(&shutdown_flag::console_ctrl_handler, TRUE);
+#endif
   }
 
   ~shutdown_flag()
   {
+#ifdef _WIN32
+    SetConsoleCtrlHandler(&shutdown_flag::console_ctrl_handler, FALSE);
+#endif
     instance_ptr() = nullptr;
   }
-  
+
   bool is_set() const
   {
     return stop_.load(std::memory_order_relaxed);
@@ -80,6 +95,24 @@ private:
     if (instance_ptr())
       instance_ptr()->stop_.store(true, std::memory_order_relaxed);
   }
+
+#ifdef _WIN32
+  static BOOL WINAPI console_ctrl_handler(DWORD ctrl_type)
+  {
+    switch (ctrl_type)
+    {
+      case CTRL_C_EVENT:
+      case CTRL_BREAK_EVENT:
+      case CTRL_CLOSE_EVENT:
+      case CTRL_LOGOFF_EVENT:
+      case CTRL_SHUTDOWN_EVENT:
+        signal_handler(0);
+        return TRUE;
+      default:
+        return FALSE;
+    }
+  }
+#endif
 
   std::atomic<bool> stop_{false};
 };
