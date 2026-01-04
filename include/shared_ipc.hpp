@@ -15,12 +15,15 @@
 
 namespace ipc
 {
-namespace bip = boost::interprocess;
+namespace bip = boost::interprocess; // short alias
 
 inline constexpr const char* k_segment_name = "demo_shared_segment"; // name of the shared memory segment
 inline constexpr const char* k_object_name  = "demo_shared_object"; // name of the shared object within the segment. sub object of shared memory segment. 
 inline constexpr std::size_t k_segment_size = 1 * 1024 * 1024; // 1 MB. you must ensure this is enough for your data. check sizeof(shared_payload).
 
+// Structure stored in shared memory.
+// This must be kept in sync between writer and reader.
+// You may modify this structure as needed, but ensure compatibility.
 struct shared_payload
 {
   std::uint32_t magic = 0xAABBCCDD; // unique identifier for the shared object
@@ -35,6 +38,7 @@ struct shared_payload
   bip::interprocess_condition cond; // condition variable for signaling updates
 };
 
+// Safe string copy into fixed-size char array
 inline void copy_cstr(char* dst, std::size_t dst_size, const char* src)
 {
   if (!dst || dst_size == 0) return;
@@ -43,6 +47,7 @@ inline void copy_cstr(char* dst, std::size_t dst_size, const char* src)
   dst[dst_size - 1] = '\0';
 }
 
+// Shutdown flag to handle termination signals
 class shutdown_flag
 {
 public:
@@ -53,6 +58,11 @@ public:
     std::signal(SIGTERM, &shutdown_flag::signal_handler);
   }
 
+  ~shutdown_flag()
+  {
+    instance_ptr() = nullptr;
+  }
+  
   bool is_set() const
   {
     return stop_.load(std::memory_order_relaxed);
@@ -74,6 +84,7 @@ private:
   std::atomic<bool> stop_{false};
 };
 
+// Get current time in milliseconds since epoch
 inline std::uint64_t now_unix_ms()
 {
   using namespace std::chrono;
@@ -82,6 +93,7 @@ inline std::uint64_t now_unix_ms()
   );
 }
 
+// Sleep for specified milliseconds
 inline void sleep_ms(int ms)
 {
   std::this_thread::sleep_for(std::chrono::milliseconds(ms));
